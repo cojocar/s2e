@@ -4,3 +4,5 @@ guest/s2ecmd/s2ecmd
 guest/s2eget/s2eget
 s2e.creator.user
 *~
+.project
+.cproject
