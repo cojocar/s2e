@@ -46,7 +46,7 @@
 namespace s2e {
 namespace plugins {
 
-static std::pair<uint64_t, uint64_t> make_range(uint64_t x, uint64_t y)
+inline static std::pair<uint64_t, uint64_t> make_range(uint64_t x, uint64_t y)
 {
     return x < y ? std::make_pair(x, y) : std::make_pair(y, x);
 }
@@ -79,7 +79,7 @@ public:
         uint64_t /* address */,
         klee::ref<klee::Expr> /* value */,
         int /*type*/ > MemoryAccessSignal;
-    typedef sigc::functor_base<void, s2e::S2EExecutionState *, unsigned long, klee::ref<klee::Expr>, int, sigc::nil, sigc::nil, sigc::nil> MemoryAccessHandlerFunction;
+    typedef sigc::functor_base<void, s2e::S2EExecutionState *, unsigned long, klee::ref<klee::Expr>, int, sigc::nil, sigc::nil, sigc::nil> * MemoryAccessHandlerPtr;
 //    typedef sigc::slot<void, S2EExecutionState *, uint64_t, klee::ref<klee::Expr>, MemoryAccessType> MemoryAccessSlot;
 
 
@@ -88,9 +88,9 @@ public:
     public:
       MemoryWatch(uint64_t start,
           uint64_t size,
-          MemoryAccessType type,
-          MemoryAccessHandlerFunction handler);
-      MemoryAccessType type;
+          int type,
+          MemoryAccessHandlerPtr handler);
+      int type;
       uint64_t start;
       uint64_t size;
       MemoryAccessSignal signal;
@@ -108,8 +108,8 @@ public:
         bool isIO);
     void addWatch(uint64_t start,
         uint64_t length,
-        MemoryAccessType type,
-        MemoryAccessHandlerFunction handler);
+        int type,
+        MemoryAccessHandlerPtr handler);
     void removeWatch(uint64_t start, uint64_t length);
 
 private:

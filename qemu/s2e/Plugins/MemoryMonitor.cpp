@@ -53,10 +53,10 @@ namespace s2e
         );
 
     MemoryMonitor::MemoryWatch::MemoryWatch(uint64_t start, uint64_t size,
-        MemoryMonitor::MemoryAccessType type, MemoryAccessHandlerFunction handler) :
+        int type, MemoryAccessHandlerPtr handler) :
         type(type), start(start), size(size)
     {
-      signal.connect(&handler);
+      signal.connect(handler);
     }
 
     void
@@ -144,7 +144,7 @@ namespace s2e
 
     void
     MemoryMonitor::addWatch(uint64_t start, uint64_t size,
-        MemoryAccessType type, MemoryAccessHandlerFunction handler)
+        int type, MemoryAccessHandlerPtr handler)
     {
       assert(size <= 8);
       
