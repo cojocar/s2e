@@ -455,7 +455,7 @@ int S2ELUAExecutionState::readParameter(lua_State *L)
         if (!m_state->readCpuRegisterConcrete(offset, &val, sizeof (val)))
             g_s2e->getDebugStream() << "S2ELUAExecutionState: could not read"
                 " parameter " << param <<
-                " at CPU->regs[" << hexval(CPU_OFFSET(eip) - offset) << "]\n";
+                " at CPU->regs[" << hexval(CPU_CONC_LIMIT - offset) << "]\n";
     } else
 #endif /* TARGET_X86_64 */
     if (!m_state->readMemoryConcrete(sp, &val, size)) {
