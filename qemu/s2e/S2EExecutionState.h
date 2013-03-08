@@ -44,6 +44,18 @@
 #include "MemoryCache.h"
 #include "s2e_config.h"
 
+/** This defines the border between concrete and symbolic area.
+ *  Eg. regs[15] is in concrete-only-area for ARM targets.
+ *  This is often used as a CPUArchState offset, see CPU_CONC_LIMIT below. */
+
+#if defined(TARGET_I386)
+#define S2E_TARGET_CONC_LIMIT eip
+#elif defined(TARGET_ARM)
+#define S2E_TARGET_CONC_LIMIT regs[15]
+#else
+#error "Target architecture not supported"
+#endif
+
 extern "C" {
     struct TranslationBlock;
     struct TimersState;
@@ -55,6 +67,7 @@ CPUArchState;
 #define CPU_REG_SIZE sizeof(target_ulong)
 #define CPU_REG_OFFSET(index) \
         (offsetof(CPUArchState, regs) + (index) * CPU_REG_SIZE)
+#define CPU_CONC_LIMIT CPU_OFFSET(S2E_TARGET_CONC_LIMIT)
 
 #include <llvm/ADT/DenseMap.h>
 #include <llvm/ADT/SmallVector.h>
