@@ -6,3 +6,4 @@ s2e.creator.user
 *~
 .project
 .cproject
+*.elf

@@ -1,17 +1,23 @@
-TOOLS_PREFIX = arm-none-eabi-
-CC = $(TOOLS_PREFIX)gcc
-OBJCOPY = $(TOOLS_PREFIX)objcopy
-S2E_QEMU = ~/s2e-build/qemu-release/arm-s2e-softmmu/qemu-system-arm
-TARGET = base-forking_test.bin
+TOOLS_PREFIX ?= arm-none-eabi-
+CC ?= $(TOOLS_PREFIX)gcc
+OBJCOPY ?= $(TOOLS_PREFIX)objcopy
+S2E_QEMU ?= ~/s2e-build/qemu-release/arm-s2e-softmmu/qemu-system-arm
+LDFLAGS += -Ttext=0x0  -nostdlib -nostdinc
+CFLAGS += -march=armv5te
+
+TARGET = \
+	 base-forking_test.bin \
+	 base-sleep_test.bin \
+	 hello.bin
 
 .SECONDARY:
 
 all: $(TARGET)
 
-%.elf: %.S
-	$(CC) -Ttext=0x0  -nostdlib -nostdinc -o $@ $^
+%.elf: %.S s2earm-inst.S
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-%.bin:%.elf
+%.bin: %.elf
 	$(OBJCOPY) -O binary $< $@
 
 .PHONY: run
