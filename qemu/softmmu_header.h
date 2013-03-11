@@ -270,9 +270,8 @@ glue(glue(glue(CPU_PREFIX, st), SUFFIX), MEMSUFFIX)(ENV_PARAM target_ulong ptr,
             glue(glue(st, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)), v);
         else
 #endif
-            glue(glue(st, SUFFIX), _raw)((uint8_t *)physaddr, v);
-
         S2E_TRACE_MEMORY(addr, physaddr, v, 1, 0);
+        glue(glue(st, SUFFIX), _raw)((uint8_t *)physaddr, v);
     }
 }
 

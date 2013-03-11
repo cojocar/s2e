@@ -33,19 +33,25 @@
 #ifndef S2E_PLUGINS_DEBUG_H
 #define S2E_PLUGINS_DEBUG_H
 
-#include <memory> //shared_ptr
+#include <tr1/memory> //shared_ptr
+#include <queue>
 
 #include <s2e/Plugin.h>
 #include <s2e/Plugins/CorePlugin.h>
 #include <s2e/S2EExecutionState.h>
 #include <s2e/Plugins/MemoryMonitor.h>
 
-#include <s2e/QemuSocket.h>
-
-namespace json
-{
-    class Object;
+extern "C" {
+#include <qemu-thread.h>
 }
+
+#include <s2e/cajunjson/reader.h>
+//#include <s2e/QemuSocket.h>
+
+//namespace json
+//{
+//    class Object;
+//}
 
 namespace s2e {
 namespace plugins {
@@ -59,10 +65,18 @@ public:
     uint64_t readMemory(uint32_t address, int size);
     QDict * getReply();
     
+    void receive(const uint8_t * data, int len);
+    void parse(void);
+    
 private:
     S2E* m_s2e;
-    std::tr1::shared_ptr<QemuTcpSocket> m_sock;
+//    std::tr1::shared_ptr<QemuTcpSocket> m_sock;
     CharDriverState * m_chrdev;
+    std::stringstream m_receiveBuffer;
+    QemuMutex m_mutex;
+    QemuCond m_responseCond;
+    std::queue<std::tr1::shared_ptr<json::Object> > m_eventQueue;
+    std::queue<std::tr1::shared_ptr<json::Object> > m_responseQueue;
 };
 
 // class QemuCharDevice
@@ -107,11 +121,11 @@ private:
     /**
      * Checks if a command has been received. If so, returns true, otherwise returns false.
      */
-    bool receiveCommand(json::Object& command);
+//    bool receiveCommand(json::Object& command);
     /**
      * Blocks until a response has been received.
      */
-    void receiveResponse(json::Object& response);
+//    void receiveResponse(json::Object& response);
     
     void slotTranslateInstructionStart(ExecutionSignal* signal, 
             S2EExecutionState* state,
@@ -120,7 +134,7 @@ private:
     void slotExecuteInstructionStart(S2EExecutionState* state, uint64_t pc);
     
     bool m_verbose;
-    MemoryMonitor * m_memoryMonitor;
+//    MemoryMonitor * m_memoryMonitor;
 //    std::tr1::shared_ptr<QemuTcpServerSocket> m_serverSocket;
 //    std::tr1::shared_ptr<QemuTcpSocket> m_remoteSocket;
     std::tr1::shared_ptr<RemoteMemoryInterface> m_remoteInterface;

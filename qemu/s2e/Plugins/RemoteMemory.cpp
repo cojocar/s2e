@@ -49,6 +49,9 @@ extern "C" {
 #include <s2e/ConfigFile.h>
 #include <s2e/Utils.h>
 
+#include <s2e/cajunjson/reader.h>
+#include <s2e/cajunjson/writer.h>
+
 //#include <s2e/cajunjson/writer.h>
 //#include <s2e/cajunjson/reader.h>
 
@@ -522,25 +525,127 @@ uint64_t RemoteMemory::memoryAccessed(uint64_t address, int size, uint64_t value
 // }
 
 extern "C" {
-static void initCharDevice(struct CharDriverState * s)
-{
-    
-}
+    static int remote_mem_can_receive(void * opaque)
+    {
+        //We can always receive arbitrary amounts
+        return 255;
+    }
+
+    static void remote_mem_chr_receive(void * opaque, const uint8_t * buf, int size)
+    {
+        static_cast<RemoteMemoryInterface *>(opaque)->receive(buf, size);
+    }
+
+    static void remote_mem_chr_event(void * opaque, int event)
+    {
+    }
 }
 
 RemoteMemoryInterface::RemoteMemoryInterface(S2E* s2e, std::string remoteSockAddress) : m_s2e(s2e), m_chrdev(0)
 {
     m_s2e->getMessagesStream() << "[RemoteMemory]: Waiting for connection on " << remoteSockAddress << '\n';
     
-    this->m_chrdev = qemu_chr_new("mem_remote_if", remoteSockAddress.c_str(), initCharDevice);
+    qemu_mutex_init(&m_mutex);
+    qemu_cond_init(&m_responseCond);
     
-    QemuTcpServerSocket serverSock = QemuTcpServerSocket(remoteSockAddress.c_str());
-    this->m_sock = std::tr1::shared_ptr<QemuTcpSocket>(new QemuTcpSocket());
+    if (remoteSockAddress.find(",server") == std::string::npos)
+    {
+        remoteSockAddress = remoteSockAddress + ",server";
+    }
+    
+    this->m_chrdev = qemu_chr_new("mem_remote_if", remoteSockAddress.c_str(), NULL);
+    
+    if (!this->m_chrdev)
+    {
+        m_s2e->getWarningsStream() << "[RemoteMemory]: Qemu chardev creation failed" << '\n';
+    }
+    qemu_chr_add_handlers(this->m_chrdev, remote_mem_can_receive, remote_mem_chr_receive, remote_mem_chr_event, this);
+    
+//    QemuTcpServerSocket serverSock = QemuTcpServerSocket(remoteSockAddress.c_str());
+//    this->m_sock = std::tr1::shared_ptr<QemuTcpSocket>(new QemuTcpSocket());
     
     
-    serverSock.accept(*m_sock);
+//    serverSock.accept(*m_sock);
     
-    s2e->getDebugStream() << "[RemoteMemory]: Client connected from " << m_sock->getRemoteAddress()->toString() << " to socket" << '\n';
+//    s2e->getDebugStream() << "[RemoteMemory]: Client connected from " << m_sock->getRemoteAddress()->toString() << " to socket" << '\n';
+}
+
+void RemoteMemoryInterface::receive(const uint8_t * data, int len)
+{
+    m_s2e->getMessagesStream() << "[RemoteMemory] received data: '" << std::string(reinterpret_cast<const char *>(data), len) << "'" << '\n';
+    m_receiveBuffer << std::string(reinterpret_cast<const char *>(data), len);
+    parse();
+}
+
+void RemoteMemoryInterface::parse(void)
+{
+    while (m_receiveBuffer.str().find_first_of("\n") != std::string::npos)
+    {
+        std::string token;
+        std::tr1::shared_ptr<json::Object> jsonObject = std::tr1::shared_ptr<json::Object>(new json::Object());
+        
+        getline(m_receiveBuffer, token, '\n');
+        std::istringstream tokenAsStream(token);
+        
+        try
+        {
+            json::Reader::Read(*jsonObject, tokenAsStream);
+            
+            if(jsonObject->Find("reply") != jsonObject->End())
+            {
+                //TODO: notify and pass object
+                qemu_mutex_lock(&m_mutex);
+                m_responseQueue.push(jsonObject);
+                qemu_cond_signal(&m_responseCond);
+                qemu_mutex_unlock(&m_mutex);
+            }
+            else
+            {
+                qemu_mutex_lock(&m_mutex);
+                m_eventQueue.push(jsonObject);
+                qemu_mutex_unlock(&m_mutex);
+            }
+        }
+        catch (json::Exception& ex)
+        {
+            m_s2e->getWarningsStream() <<  "[RemoteMemory] Exception in JSON data: '" << token << "'" << '\n';
+        }
+            
+//        std::istringstream iResponseStream(token);
+//         
+//         json::Reader::Read(response, iResponseStream);
+//        QObject * obj= qobject_from_jsonf("%s", token.c_str());
+//        if (obj && qobject_type(obj) == QTYPE_QDICT)
+//        {
+//            QDict * dict = qobject_to_qdict(obj);
+//            
+//            m_eventQueue.push_
+//            reply = qdict_get_try_str(dict, "reply");
+ //           
+ //       }
+        
+        
+//        qobject_decref(obj);
+    }
+}
+
+static std::string intToHex(uint64_t val)
+{
+    std::stringstream ss;
+    
+    ss << "0x" << std::hex << val;
+    return ss.str();
+}
+
+static uint64_t hexToInt(std::string str)
+{
+    std::stringstream ss;
+    uint64_t val;
+    
+    ss << str.substr(2, std::string::npos);
+    ss >> std::hex >> val;
+    
+    return val;
 }
   
 /**
@@ -548,43 +653,28 @@ RemoteMemoryInterface::RemoteMemoryInterface(S2E* s2e, std::string remoteSockAdd
  */
 uint64_t RemoteMemoryInterface::readMemory(uint32_t address, int size)
 {
-    QDict * dict = qdict_new();
-    QString * str;
-    QDict * reply_dict;
-    uint64_t value;
-    
-    qdict_put(dict, "cmd", qstring_from_str("read"));
-    qdict_put(dict, "address", qint_from_int(address));
-    qdict_put(dict, "size", qint_from_int(size));
-    
-    str = qobject_to_json(QOBJECT(dict));
-    
-    try
-    {
-        *m_sock << qstring_get_str(str) << '\n';
-        m_sock->flush();
-    }
-    catch(SocketException& ex)
-    {
-        //TODO: Handle error
-    }
-    
-    reply_dict = getReply();
-    
-    if (!reply_dict || !qdict_haskey(reply_dict, "value"))
-    {
-        //TODO: Fail, invalid reply
-    }
-    
-    value = qdict_get_int(reply_dict, "value");
-    
-    
-    
-    QDECREF(str);
-    QDECREF(dict);
-    QDECREF(reply_dict);
-    
-    return value;
+     json::Object request;
+     
+     m_s2e->getMessagesStream() << "[RemoteMemory] reading memory from address " << hexval(address) << "[" << size << "]" << '\n';
+     request.Insert(json::Object::Member("cmd", json::String("read")));
+     request.Insert(json::Object::Member("address", json::String(intToHex(address))));
+     request.Insert(json::Object::Member("size", json::String(intToHex(size))));
+     
+     std::ostringstream ss;
+     json::Writer::Write(request, ss); 
+     qemu_mutex_lock(&m_mutex);
+     qemu_chr_fe_write(m_chrdev, reinterpret_cast<const uint8_t *>(ss.str().c_str()), ss.str().size());
+     qemu_cond_wait(&m_responseCond, &m_mutex);
+     
+     //TODO: There could be multiple responses, but we assume the first is the right
+     std::tr1::shared_ptr<json::Object> response = m_responseQueue.front();
+     m_responseQueue.pop();
+     qemu_mutex_unlock(&m_mutex);
+     
+     //TODO: No checking if this is the right response, if there is an attribute 'value'
+     json::String& strValue = (*response)["value"];
+     m_s2e->getMessagesStream() << "[RemoteMemory] Remote returned value " << strValue << '\n';
+     return hexToInt(strValue);
 }
   
 /**
@@ -593,27 +683,27 @@ uint64_t RemoteMemoryInterface::readMemory(uint32_t address, int size)
  */
 void RemoteMemoryInterface::writeMemory(uint32_t address, int size, uint64_t value)
 {
-    QDict * dict = qdict_new();
-    QString * str;
+//     QDict * dict = qdict_new();
+//     QString * str;
+//     
+//     qdict_put(dict, "cmd", qstring_from_str("write"));
+//     qdict_put(dict, "address", qint_from_int(address));
+//     qdict_put(dict, "size", qint_from_int(size));
+//     qdict_put(dict, "value", qint_from_int(value));
+//     
+//     str = qobject_to_json(QOBJECT(dict));
+//     try
+//     {
+//         *m_sock << qstring_get_str(str) << '\n';
+//         m_sock->flush();
+//     }
+//     catch(SocketException& ex)
+//     {
+//         //TODO: Handle exception
+//     }
     
-    qdict_put(dict, "cmd", qstring_from_str("write"));
-    qdict_put(dict, "address", qint_from_int(address));
-    qdict_put(dict, "size", qint_from_int(size));
-    qdict_put(dict, "value", qint_from_int(value));
-    
-    str = qobject_to_json(QOBJECT(dict));
-    try
-    {
-        *m_sock << qstring_get_str(str) << '\n';
-        m_sock->flush();
-    }
-    catch(SocketException& ex)
-    {
-        //TODO: Handle exception
-    }
-    
-    QDECREF(dict);
-    QDECREF(str);
+//     QDECREF(dict);
+//     QDECREF(str);
 }
 
 QDict * RemoteMemoryInterface::getReply()
@@ -622,14 +712,14 @@ QDict * RemoteMemoryInterface::getReply()
     QObject * obj;
     const char *reply;
     
-    try
-     {
+//    try
+//     {
          std::string responseString;
          
          //returns when reply is received
          while (true)
          {
-            getline(*m_sock, responseString);
+//            getline(*m_sock, responseString);
             
             obj = qobject_from_jsonf("%s", responseString.c_str());
             if (obj && qobject_type(obj) == QTYPE_QDICT)
@@ -647,12 +737,12 @@ QDict * RemoteMemoryInterface::getReply()
                 }
             }
          }
-     }
-     catch (SocketException& ex)
-     {
-         m_s2e->getWarningsStream() << "EXCEPTION: " << ex.what() << " with error code " << strerror(ex.error_code()) << '\n';
-         return NULL;
-     }
+//     }
+//     catch (SocketException& ex)
+//     {
+//         m_s2e->getWarningsStream() << "EXCEPTION: " << ex.what() << " with error code " << strerror(ex.error_code()) << '\n';
+//         return NULL;
+//     }
 }
 
 // QDict * RemoteMemoryInterface::getEvent()
@@ -662,6 +752,9 @@ QDict * RemoteMemoryInterface::getReply()
 
 RemoteMemoryInterface::~RemoteMemoryInterface()
 {
+    qemu_cond_destroy(&m_responseCond);
+    qemu_mutex_destroy(&m_mutex);
+    qemu_chr_delete(m_chrdev);
 }
 
 } /* namespace plugins */
