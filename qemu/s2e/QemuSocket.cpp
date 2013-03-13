@@ -271,15 +271,17 @@ namespace s2e
         
 repeat_read:
         if (!m_isConnected)
+        {
             throw SocketNotConnectedException();
+        }
             
         //Wait timeout milliseconds and then check if bytes are available if a timeout is requested
         size_t available_bytes = getAvailableBytes(timeout);
         
         if (available_bytes < 1)
         {
-                length = 0;
-                return;
+            length = 0;
+            return;
         }
         
         int read_length = ::read(m_socket, buffer, length);

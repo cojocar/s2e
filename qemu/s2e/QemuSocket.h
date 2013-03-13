@@ -181,7 +181,7 @@ namespace s2e {
          */
         size_t getAvailableBytes(uint64_t timeout = 0);
         
-        bool isConnected();
+        bool isConnected() {return m_isConnected;}
         
         void close();
     private:

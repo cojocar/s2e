@@ -46,7 +46,7 @@ extern "C" {
 }
 
 #include <s2e/cajunjson/reader.h>
-//#include <s2e/QemuSocket.h>
+#include <s2e/QemuSocket.h>
 
 //namespace json
 //{
@@ -61,22 +61,26 @@ class RemoteMemoryInterface
 public:
     RemoteMemoryInterface(S2E* s2e, std::string sockAddress);
     virtual ~RemoteMemoryInterface();
-    void writeMemory(uint32_t address, int size, uint64_t value);
-    uint64_t readMemory(uint32_t address, int size);
-    QDict * getReply();
+    void writeMemory(S2EExecutionState*, uint32_t address, int size, uint64_t value);
+    uint64_t readMemory(S2EExecutionState*, uint32_t address, int size);
     
-    void receive(const uint8_t * data, int len);
-    void parse(void);
+    void parse(std::string& token);
     
 private:
+    static void * receiveThread(void *);
+    void handleClientCommand(std::string cmd, std::tr1::shared_ptr<json::Object> params);
+    
     S2E* m_s2e;
-//    std::tr1::shared_ptr<QemuTcpSocket> m_sock;
-    CharDriverState * m_chrdev;
-    std::stringstream m_receiveBuffer;
+//    CharDriverState * m_chrdev;
+//    std::stringstream m_receiveBuffer;
     QemuMutex m_mutex;
     QemuCond m_responseCond;
-    std::queue<std::tr1::shared_ptr<json::Object> > m_eventQueue;
+    QemuThread m_thread;
+    std::queue<std::tr1::shared_ptr<json::Object> > m_interruptQueue;
     std::queue<std::tr1::shared_ptr<json::Object> > m_responseQueue;
+    bool m_cancelThread;
+    std::tr1::shared_ptr<s2e::QemuTcpSocket> m_socket;
+    S2EExecutionState * m_state;
 };
 
 // class QemuCharDevice
@@ -116,7 +120,7 @@ private:
     /**
      * slotMemoryAccess forwards the call to this function after the arguments have been parsed and checked.
      */
-    uint64_t memoryAccessed(uint64_t address, int width, uint64_t value, MemoryAccessType type);
+    uint64_t memoryAccessed(S2EExecutionState *, uint64_t address, int width, uint64_t value, MemoryAccessType type);
     
     /**
      * Checks if a command has been received. If so, returns true, otherwise returns false.

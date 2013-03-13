@@ -522,6 +522,7 @@ s2eobj-y += s2e/Plugins/RemoteMemory.o
 #s2eobj-y += s2e/Database.o
 
 #s2eobj-y += s2e/Plugins/WindowsInterceptor/WindowsSpy.o
+s2eobj-y += s2e/QemuSocket.o
 s2eobj-y += s2e/ConfigFile.o
 s2eobj-y += s2e/SelectRemovalPass.o
 s2eobj-y += s2e/S2EExecutor.o
