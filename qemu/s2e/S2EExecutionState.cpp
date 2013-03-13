@@ -631,6 +631,8 @@ uint64_t S2EExecutionState::getFlags()
     WR_cpu(env, cc_src, cpu_cc_compute_all(env, CC_OP));
     WR_cpu(env, cc_op, CC_OP_EFLAGS);
     return cpu_get_eflags(env);
+#elif TARGET_ARM
+    return cpsr_read(reinterpret_cast<CPUArchState *>(m_cpuRegistersState->address));
 #else
     return 0;
 #endif
