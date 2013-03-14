@@ -166,6 +166,8 @@ static void board_init(ram_addr_t ram_size,
             MemoryRegion * ram;
             int is_rom = FALSE; //TODO: Currently ignored, only RAM is used
             uint64_t address;
+            int is_first_mapping = TRUE;
+            int alias_num = 0;
             
             g_assert(qobject_type(entry->value) == QTYPE_QDICT);
             mapping = qobject_to_qdict(entry->value);
@@ -192,14 +194,38 @@ static void board_init(ram_addr_t ram_size,
                 
                 address = qint_get_int(qobject_to_qint(address_entry->value));
                 
-                printf("Configurable: Adding memory region %s (size: 0x%lx) at address 0x%lx\n", name, size, address);
-                memory_region_add_subregion(sysmem, address, ram);
-                
+                if (is_first_mapping)
+                {
+                    printf("Configurable: Adding memory region %s (size: 0x%lx) at address 0x%lx\n", name, size, address);
+                    memory_region_add_subregion(sysmem, address, ram);
+                    is_first_mapping = FALSE;
+                    
 #ifdef CONFIG_S2E
             s2e_register_ram(g_s2e, g_s2e_state,
                   address, size,
                   (uint64_t) memory_region_get_ram_ptr(ram), 0, 0, name);
 #endif
+                }
+                else
+                {
+                    MemoryRegion * ram_alias =  g_new(MemoryRegion, 1);
+                    g_assert(ram_alias);
+                    char alias_name[60];
+                    
+                    snprintf(alias_name, sizeof(alias_name), "%s_alias_%d", name, alias_num);
+                    
+                    printf("Configurable: Adding memory region %s (size: 0x%lx) at address 0x%lx\n", alias_name, size, address);
+                    memory_region_init_alias(ram_alias, alias_name, ram, 0, size);
+                    memory_region_add_subregion(sysmem, address, ram_alias);
+                    
+// #ifdef CONFIG_S2E
+//             s2e_register_ram(g_s2e, g_s2e_state,
+//                   address, size,
+//                   (uint64_t) memory_region_get_ram_ptr(ram_alias), 0, 0, alias_name);
+// #endif
+                }
+                
+                alias_num += 1;
             }
 
             if (qdict_haskey(mapping, "file"))
