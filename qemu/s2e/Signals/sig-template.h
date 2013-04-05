@@ -108,12 +108,20 @@ bool empty() const{
     return m_activeSignals == 0;
 }
 
-void emit(OPERATOR_PARAM_DECL) {
-    for (unsigned i=0; i<m_size; ++i) {
+RET emit(OPERATOR_PARAM_DECL) {
+    int last;
+    for (last = m_size - 1; last >= 0 && !m_funcs[last]; last--);
+    
+    for (int i=0; i < last; ++i) {
         if (m_funcs[i]) {
             m_funcs[i]->operator ()(CALL_PARAMS);
         }
     }
+    
+    if (last >= 0)
+        return m_funcs[last]->operator ()(CALL_PARAMS);
+    else
+        return RET();
 }
 
 

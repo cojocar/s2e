@@ -97,7 +97,7 @@ namespace s2e
 //      }
     }
 
-    void
+    klee::ref<klee::Expr>
     MemoryMonitor::slotMemoryAccess(S2EExecutionState *state,
         klee::ref<klee::Expr> virtaddr /* virtualAddress */,
         klee::ref<klee::Expr> hostaddr /* hostAddress */,
@@ -108,7 +108,7 @@ namespace s2e
         s2e()->getWarningsStream()
             << "[MemoryMonitor]: Address is not constant ("
             << virtaddr->getKind() << ")" << '\n';
-        return;
+        return value;
       }
       uint64_t addr = cast<klee::ConstantExpr>(virtaddr)->getZExtValue();
       uint64_t size = value->getWidth() / 8;
@@ -117,6 +117,8 @@ namespace s2e
                    (state->getPc() == addr ? EMemoryExecute : 0) |
                    (isIO ? EMemoryIO : EMemoryNotIO) | 
                    (isa<klee::ConstantExpr>(value) ? EMemoryConcrete : EMemorySymbolic);
+                   
+      s2e()->getDebugStream() << "[MemoryMonitor] Memory access at " << hexval(addr) << "[" << size << "] " << (isWrite ? "write" : "read") << '\n';
       //TODO: End of address range (addr + width) should be checked too, but for now we assume
       //that it will be on the same page
 //      std::vector<MemoryWatch> * watches = pageDirectory[addr
@@ -139,6 +141,8 @@ namespace s2e
               itr->second.signal.emit(state, addr, value, access);
           }
       }
+      
+      return value;
 
     }
 

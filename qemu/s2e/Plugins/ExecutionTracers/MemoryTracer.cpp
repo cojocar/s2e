@@ -108,9 +108,9 @@ void MemoryTracer::initialize()
 }
 
 void MemoryTracer::traceDataMemoryAccess(S2EExecutionState *state,
-                               klee::ref<klee::Expr> &address,
-                               klee::ref<klee::Expr> &hostAddress,
-                               klee::ref<klee::Expr> &value,
+                               klee::ref<klee::Expr> address,
+                               klee::ref<klee::Expr> hostAddress,
+                               klee::ref<klee::Expr> value,
                                bool isWrite, bool isIO)
 {
     if (m_catchAbove || m_catchBelow) {
@@ -173,7 +173,7 @@ void MemoryTracer::traceDataMemoryAccess(S2EExecutionState *state,
     m_tracer->writeData(state, &e, sizeof(e), TRACE_MEMORY);
 }
 
-void MemoryTracer::onDataMemoryAccess(S2EExecutionState *state,
+klee::ref<klee::Expr> MemoryTracer::onDataMemoryAccess(S2EExecutionState *state,
                                klee::ref<klee::Expr> address,
                                klee::ref<klee::Expr> hostAddress,
                                klee::ref<klee::Expr> value,
@@ -183,10 +183,12 @@ void MemoryTracer::onDataMemoryAccess(S2EExecutionState *state,
     //Sometimes the onModuleTransition is not fired properly...
     if (m_execDetector && m_monitorModules && !m_execDetector->getCurrentDescriptor(state)) {
         m_memoryMonitor.disconnect();
-        return;
+        return value;
     }
 
     traceDataMemoryAccess(state, address, hostAddress, value, isWrite, isIO);
+    
+    return value;
 }
 
 void MemoryTracer::onModuleTransition(S2EExecutionState *state,

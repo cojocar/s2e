@@ -90,7 +90,7 @@ private:
 
     bool decideTracing(S2EExecutionState *state, uint64_t addr, uint64_t data) const;
 
-    void onDataMemoryAccess(S2EExecutionState *state,
+    klee::ref<klee::Expr> onDataMemoryAccess(S2EExecutionState *state,
                                    klee::ref<klee::Expr> address,
                                    klee::ref<klee::Expr> hostAddress,
                                    klee::ref<klee::Expr> value,

@@ -80,7 +80,7 @@ class MemoryChecker : public Plugin
                             const ModuleDescriptor *prevModule,
                             const ModuleDescriptor *nextModule);
 
-    void onDataMemoryAccess(S2EExecutionState *state,
+    klee::ref<klee::Expr> onDataMemoryAccess(S2EExecutionState *state,
                  klee::ref<klee::Expr> virtualAddress,
                  klee::ref<klee::Expr> hostAddress,
                  klee::ref<klee::Expr> value,

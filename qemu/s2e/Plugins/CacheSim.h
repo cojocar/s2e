@@ -104,7 +104,7 @@ protected:
                         uint64_t address, unsigned size,
                         bool isWrite, bool isIO, bool isCode);
 
-    void onDataMemoryAccess(S2EExecutionState* state,
+    klee::ref<klee::Expr> onDataMemoryAccess(S2EExecutionState* state,
                         klee::ref<klee::Expr> address,
                         klee::ref<klee::Expr> hostAddress,
                         klee::ref<klee::Expr> value,

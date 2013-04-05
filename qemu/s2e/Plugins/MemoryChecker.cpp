@@ -234,7 +234,7 @@ void MemoryChecker::onException(S2EExecutionState *state, unsigned intNb, uint64
     m_dataMemoryAccessConnection.disconnect();
 }
 
-void MemoryChecker::onDataMemoryAccess(S2EExecutionState *state,
+klee::ref<klee::Expr> MemoryChecker::onDataMemoryAccess(S2EExecutionState *state,
                                        klee::ref<klee::Expr> virtualAddress,
                                        klee::ref<klee::Expr> hostAddress,
                                        klee::ref<klee::Expr> value,
@@ -243,20 +243,20 @@ void MemoryChecker::onDataMemoryAccess(S2EExecutionState *state,
     if (state->isRunningExceptionEmulationCode()) {
         //We do not check what memory the CPU accesses.
         //s2e()->getWarningsStream() << "Running emulation code" << std::endl;
-        return;
+        return value;
     }
 
     if(!isa<klee::ConstantExpr>(virtualAddress)) {
         s2e()->getWarningsStream(state) << "Symbolic memory accesses are "
                 << "not yet supported by MemoryChecker" << '\n';
-        return;
+        return value;
     }
 
     //XXX: This is a hack.
     //Sometimes the onModuleTransition is not fired properly...
     if (!m_moduleDetector->getCurrentDescriptor(state)) {
         m_dataMemoryAccessConnection.disconnect();
-        return;
+        return value;
     }
 
     if (m_traceMemoryAccesses) {
@@ -278,7 +278,7 @@ void MemoryChecker::onDataMemoryAccess(S2EExecutionState *state,
     if (!result) {
         onPostCheck.emit(state, start, accessSize, isWrite, &result);
         if (result) {
-            return;
+            return value;
         }
 
         if(m_terminateOnErrors)
@@ -286,6 +286,8 @@ void MemoryChecker::onDataMemoryAccess(S2EExecutionState *state,
         else
             s2e()->getWarningsStream(state) << err.str();
     }
+    
+    return value;
 }
 
 bool MemoryChecker::matchRegionType(const std::string &pattern, const std::string &type)

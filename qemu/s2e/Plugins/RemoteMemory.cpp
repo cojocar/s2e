@@ -60,7 +60,7 @@ extern "C" {
 namespace s2e {
 namespace plugins {
     
-S2E_DEFINE_PLUGIN(RemoteMemory, "Asks a remote program what the memory contents actually should be", "RemoteMemory", "MemoryMonitor", "Initializer");
+S2E_DEFINE_PLUGIN(RemoteMemory, "Asks a remote program what the memory contents actually should be", "RemoteMemory", "Initializer");
 
 void RemoteMemory::initialize()
 {
@@ -80,7 +80,7 @@ void RemoteMemory::initialize()
           
     s2e()->getCorePlugin()->onTranslateInstructionStart.connect(
           sigc::mem_fun(*this, &RemoteMemory::slotTranslateInstructionStart));
-      
+    
     if (m_verbose)
         s2e()->getDebugStream() << "[RemoteMemory]: initialized" << '\n';
 }
@@ -102,7 +102,7 @@ void RemoteMemory::slotExecuteInstructionStart(S2EExecutionState* state, uint64_
     //TODO: Check if IRQ has arrived, and inject it
 }
 
-void RemoteMemory::slotMemoryAccess(S2EExecutionState *state,
+klee::ref<klee::Expr> RemoteMemory::slotMemoryAccess(S2EExecutionState *state,
         klee::ref<klee::Expr> virtaddr /* virtualAddress */,
         klee::ref<klee::Expr> hostaddr /* hostAddress */,
         klee::ref<klee::Expr> value /* value */,
@@ -115,7 +115,7 @@ void RemoteMemory::slotMemoryAccess(S2EExecutionState *state,
         s2e()->getWarningsStream()
             << "[RemoteMemory]: Unexpected symbolic address ("
             << virtaddr->getKind() << ")" << '\n';
-        return;
+        return value;
     }
       
     if (isIO)
@@ -129,13 +129,13 @@ void RemoteMemory::slotMemoryAccess(S2EExecutionState *state,
         s2e()->getWarningsStream()
             << "[RemoteMemory]: Unexpected symbolic value ("
             << value->getKind() << ")" << '\n';
-        return;
+        return value;
     }
     
     MemoryAccessType accessType = EMemoryAccessType_None;
     uint64_t addr = cast<klee::ConstantExpr>(virtaddr)->getZExtValue();
     uint64_t width = value->getWidth() / 8;
-    
+
     if (isWrite)
         accessType = EMemoryAccessType_Write;
     else
@@ -148,9 +148,13 @@ void RemoteMemory::slotMemoryAccess(S2EExecutionState *state,
     
     if (rValue != cast<klee::ConstantExpr>(value)->getZExtValue())
     {
-//        writeMemory(state, addr, width * 8, rValue);
-
-        //TODO: Write value back into klee expr
+        s2e()->getDebugStream() << "[RemoteMemory]: Returning different value " << hexval(rValue) << "[" << width 
+            << "] instead of " << hexval(cast<klee::ConstantExpr>(value)->getZExtValue()) << "[" << (value->getWidth() / 8) << "]" << '\n';
+        return klee::ConstantExpr::create(rValue, width * 8);
+    }
+    else
+    {
+        return value;
     }
 }
 
@@ -187,16 +191,19 @@ static std::string intToHex(uint64_t val)
     return ss.str();
 }
 
-static uint64_t hexToInt(std::string str)
+static uint64_t hexBufToInt(std::string str)
 {
+    uint64_t val = 0;
     std::stringstream ss;
-    uint64_t val;
     
-    ss << str.substr(2, std::string::npos);
+    ss << str;
     ss >> std::hex >> val;
-    
+
     return val;
 }
+
+    
+    
 
 RemoteMemoryInterface::RemoteMemoryInterface(S2E* s2e, std::string remoteSockAddress) 
     : m_s2e(s2e), 
@@ -230,7 +237,7 @@ void * RemoteMemoryInterface::receiveThread(void * opaque)
             break;
         }
         
-        rmi->m_s2e->getMessagesStream() << "[RemoteMemory] received json: '" << token << "'" << '\n'; 
+//        rmi->m_s2e->getMessagesStream() << "[RemoteMemory] received json: '" << token << "'" << '\n'; 
         
         rmi->parse(token);
     }
@@ -306,7 +313,11 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
      //HACK: Instead of using the physical address switch here, this should be specified somehow ...
      klee::ref<klee::Expr> exprValue = state->readMemory(address, size << 3, S2EExecutionState::PhysicalAddress);
      
-     if (isa<klee::ConstantExpr>(exprValue))
+     if (exprValue.isNull())
+     {
+         m_s2e->getMessagesStream() << "[RemoteMemory] Failed to read old memory value at address " << hexval(address) << '\n';
+     }
+     else if (isa<klee::ConstantExpr>(exprValue))
      {
          params.Insert(json::Object::Member("old_value", json::String(intToHex(cast<klee::ConstantExpr>(exprValue)->getZExtValue()))));
      }
@@ -370,8 +381,8 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
      
      //TODO: No checking if this is the right response, if there is an attribute 'value'
      json::String& strValue = (*response)["value"];
-     m_s2e->getMessagesStream() << "[RemoteMemory] Remote returned value " << strValue << '\n';
-     return hexToInt(strValue);
+//     m_s2e->getMessagesStream() << "[RemoteMemory] Remote returned value " << strValue << '\n';
+     return hexBufToInt(strValue);
 }
   
 /**

@@ -185,7 +185,7 @@ public:
 
     /** Signal that is emitted on each memory access */
     /* XXX: this signal is still not emitted for code */
-    sigc::signal<void, S2EExecutionState*,
+    sigc::signal<klee::ref<klee::Expr>, S2EExecutionState*,
                  klee::ref<klee::Expr> /* virtualAddress */,
                  klee::ref<klee::Expr> /* hostAddress */,
                  klee::ref<klee::Expr> /* value */,
