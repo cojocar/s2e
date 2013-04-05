@@ -142,6 +142,7 @@ private:
 //    std::tr1::shared_ptr<QemuTcpServerSocket> m_serverSocket;
 //    std::tr1::shared_ptr<QemuTcpSocket> m_remoteSocket;
     std::tr1::shared_ptr<RemoteMemoryInterface> m_remoteInterface;
+    std::vector< std::pair< uint64_t, uint64_t > > ranges;
     
 };
 
