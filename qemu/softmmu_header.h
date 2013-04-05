@@ -100,14 +100,14 @@
 #define S2EINLINE
 #define S2E_TRACE_MEMORY(vaddr, haddr, value, isWrite, isIO) \
     tcg_llvm_trace_memory_access(vaddr, haddr, \
-                                 value, 8*sizeof(value), isWrite, isIO);
+                                 value, 8*DATA_SIZE, isWrite, isIO);
 #define S2E_FORK_AND_CONCRETIZE(val, max) \
     tcg_llvm_fork_and_concretize(val, 0, max)
 #else // S2E_LLVM_LIB
 #define S2EINLINE inline
 #define S2E_TRACE_MEMORY(vaddr, haddr, value, isWrite, isIO) \
     s2e_trace_memory_access(vaddr, haddr, \
-                            (uint8_t*) &value, sizeof(value), isWrite, isIO);
+                            (uint8_t*) &value, DATA_SIZE, isWrite, isIO);
 #define S2E_FORK_AND_CONCRETIZE(val, max) (val)
 #endif // S2E_LLVM_LIB
 
@@ -168,6 +168,8 @@ glue(glue(glue(CPU_PREFIX, ld), USUFFIX), MEMSUFFIX)(ENV_PARAM
     target_ulong addr;
     uintptr_t physaddr;
     int mmu_idx;
+    
+    printf("CPU_PREFIX, ld: 0x%lx[%ld]\n", (uint64_t) ptr, sizeof(res));
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(ptr, ADDR_MAX);
     object_index = S2E_FORK_AND_CONCRETIZE(addr >> S2E_RAM_OBJECT_BITS,
@@ -210,6 +212,8 @@ glue(glue(glue(CPU_PREFIX, lds), SUFFIX), MEMSUFFIX)(ENV_PARAM
     target_ulong addr;
     uintptr_t physaddr;
     int mmu_idx;
+    
+    printf("CPU_PREFIX, lds: 0x%lx[%d]\n", (uint64_t) ptr, DATA_SIZE);
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(ptr, ADDR_MAX);
     object_index = S2E_FORK_AND_CONCRETIZE(addr >> S2E_RAM_OBJECT_BITS,
@@ -250,6 +254,8 @@ glue(glue(glue(CPU_PREFIX, st), SUFFIX), MEMSUFFIX)(ENV_PARAM target_ulong ptr,
     target_ulong addr;
     uintptr_t physaddr;
     int mmu_idx;
+    
+    printf("CPU_PREFIX, st: 0x%lx[%ld]\n", (uint64_t) ptr, sizeof(v));
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(ptr, ADDR_MAX);
     object_index = S2E_FORK_AND_CONCRETIZE(addr >> S2E_RAM_OBJECT_BITS,

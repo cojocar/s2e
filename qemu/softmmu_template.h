@@ -131,6 +131,8 @@ DATA_TYPE glue(glue(io_read, SUFFIX), MMUSUFFIX)(ENV_PARAM
                                               void *retaddr)
 {
     DATA_TYPE res;
+    
+    printf("io_read: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(res));
     MemoryRegion *mr = iotlb_to_region(physaddr);
 
     physaddr = (physaddr & TARGET_PAGE_MASK) + addr;
@@ -168,6 +170,7 @@ inline DATA_TYPE glue(glue(io_read_chk, SUFFIX), MMUSUFFIX)(ENV_PARAM target_phy
                                           target_ulong addr,
                                           void *retaddr)
 {
+    printf("io_read_chk: 0x%lx[%d]\n", (uint64_t) addr, DATA_SIZE);
     return glue(glue(io_read, SUFFIX), MMUSUFFIX)(ENV_VAR physaddr, addr, retaddr);
 }
 
@@ -207,6 +210,8 @@ inline DATA_TYPE glue(glue(io_read_chk, SUFFIX), MMUSUFFIX)(ENV_PARAM target_phy
     target_phys_addr_t origaddr = physaddr;
     MemoryRegion *mr = iotlb_to_region(physaddr);
 
+    printf("io_read_chk: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(res));
+    
     target_ulong naddr = (physaddr & TARGET_PAGE_MASK)+addr;
     char label[64];
     int isSymb = 0;
@@ -286,6 +291,8 @@ glue(glue(glue(HELPER_PREFIX, ld), SUFFIX), MMUSUFFIX)(ENV_PARAM
     target_ulong tlb_addr;
     target_phys_addr_t addend, ioaddr;
     void *retaddr = NULL;
+    
+    printf("HELPER_PREFIX, ld: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(res));
 
     /* test if there is match for unaligned or IO access */
     /* XXX: could done more in memory macro in a non portable way */
@@ -369,6 +376,8 @@ glue(glue(slow_ld, SUFFIX), MMUSUFFIX)(ENV_PARAM
     target_ulong object_index, index, shift;
     target_phys_addr_t addend, ioaddr;
     target_ulong tlb_addr, addr1, addr2;
+    
+    printf("HELPER_PREFIX, slow_ld: 0x%lx[%d]\n", (uint64_t) addr, DATA_SIZE);
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(addr, ADDR_MAX);
     object_index = S2E_FORK_AND_CONCRETIZE(addr >> S2E_RAM_OBJECT_BITS,
@@ -450,6 +459,8 @@ void glue(glue(io_write, SUFFIX), MMUSUFFIX)(ENV_PARAM
                                           void *retaddr)
 {
     MemoryRegion *mr = iotlb_to_region(physaddr);
+    
+    printf("io_write: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(val));
 
     physaddr = (physaddr & TARGET_PAGE_MASK) + addr;
     if (mr != &io_mem_ram && mr != &io_mem_rom
@@ -479,6 +490,7 @@ inline void glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_PARAM target_phys_ad
                                           target_ulong addr,
                                           void *retaddr)
 {
+    printf("io_write_chk(1): 0x%lx[%ld]\n", (uint64_t) addr, sizeof(val));
     //XXX: check symbolic memory mapped devices and write log here.
     glue(glue(io_write, SUFFIX), MMUSUFFIX)(ENV_VAR physaddr, val, addr, retaddr);
 }
@@ -499,6 +511,8 @@ inline void glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_PARAM target_phys_ad
                                           target_ulong addr,
                                           void *retaddr)
 {
+    printf("io_write_chk(2): 0x%lx[%ld]\n", (uint64_t) addr, sizeof(val));
+    
     target_phys_addr_t origaddr = physaddr;
     MemoryRegion *mr = iotlb_to_region(physaddr);
 
@@ -565,6 +579,8 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
     target_ulong tlb_addr;
     void *retaddr = NULL;
     target_ulong object_index, index;
+    
+    printf("HELPER_PREFIX st+: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(val));
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(addr, ADDR_MAX);
     object_index = S2E_FORK_AND_CONCRETIZE(addr >> S2E_RAM_OBJECT_BITS,
@@ -642,6 +658,8 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_PARAM
     target_ulong tlb_addr;
     target_ulong object_index, index;
     int i;
+    
+    printf("slow_st: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(val));
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(addr, ADDR_MAX);
     object_index = S2E_FORK_AND_CONCRETIZE(addr >> S2E_RAM_OBJECT_BITS,
