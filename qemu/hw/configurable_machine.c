@@ -168,6 +168,7 @@ static void board_init(ram_addr_t ram_size,
             uint64_t address;
             int is_first_mapping = TRUE;
             int alias_num = 0;
+ //           void * ram_ptr;
             
             g_assert(qobject_type(entry->value) == QTYPE_QDICT);
             mapping = qobject_to_qdict(entry->value);
@@ -176,6 +177,7 @@ static void board_init(ram_addr_t ram_size,
             g_assert(qdict_haskey(mapping, "name") && qobject_type(qdict_get(mapping, "name")) == QTYPE_QSTRING);
             g_assert(!qdict_haskey(mapping, "is_rom") || qobject_type(qdict_get(mapping, "is_rom")) == QTYPE_QBOOL);
             g_assert(qdict_haskey(mapping, "size") && qobject_type(qdict_get(mapping, "size")) == QTYPE_QINT);
+            g_assert((qdict_get_int(mapping, "size") & ((1 << 12) - 1)) == 0); //Somewhere deep in QEMU there seems to be a requirement that memory regions have starting addresses with the lowest 12 bit clear
             
             addresses = qobject_to_qlist(qdict_get(mapping, "map"));
             name = qdict_get_str(mapping, "name");
@@ -190,9 +192,12 @@ static void board_init(ram_addr_t ram_size,
             
             QLIST_FOREACH_ENTRY(addresses, address_entry)
             {
-                g_assert(qobject_type(address_entry->value) == QTYPE_QINT);
+                QDict * address_dict;
+                g_assert(qobject_type(address_entry->value) == QTYPE_QDICT);
+                address_dict = qobject_to_qdict(address_entry->value);
+                g_assert(qdict_haskey(address_dict, "address") && qobject_type(qdict_get(address_dict, "address")) == QTYPE_QINT);
                 
-                address = qint_get_int(qobject_to_qint(address_entry->value));
+                address = qdict_get_int(address_dict, "address");
                 
                 if (is_first_mapping)
                 {
@@ -212,12 +217,15 @@ static void board_init(ram_addr_t ram_size,
                     g_assert(ram_alias);
                     char alias_name[60];
                     
-                    snprintf(alias_name, sizeof(alias_name), "%s_alias_%d", name, alias_num);
+                    snprintf(alias_name, sizeof(alias_name), "%s.alias_%d", name, alias_num);
                     
                     printf("Configurable: Adding memory region %s (size: 0x%lx) at address 0x%lx\n", alias_name, size, address);
                     memory_region_init_alias(ram_alias, alias_name, ram, 0, size);
                     memory_region_add_subregion(sysmem, address, ram_alias);
                     
+                    /* Adding an alias memory region to S2E via s2e_register_ram causes a segfault, so don't do it. */
+              
+//Apparently you only add ram once to S2E - otherwise segfault :/
 // #ifdef CONFIG_S2E
 //             s2e_register_ram(g_s2e, g_s2e_state,
 //                   address, size,
@@ -235,7 +243,6 @@ static void board_init(ram_addr_t ram_size,
                 int dirname_len = get_dirname_len(kernel_filename);
                 ssize_t err;
                 
-                printf("kernel filename: '%s' (%d)\n", kernel_filename, dirname_len);
                 g_assert(qobject_type(qdict_get(mapping, "file")) == QTYPE_QSTRING);
                 filename = qdict_get_str(mapping, "file");
                 
@@ -260,9 +267,7 @@ static void board_init(ram_addr_t ram_size,
                 
                 g_assert(data_size <= size); //Size of data to put into a RAM region needs to fit in the RAM region
                 
-                printf("Size is: %ld\n", size);
-                
-                data = g_malloc(size);
+                data = g_malloc(data_size);
                 g_assert(data);
                 
                 err = read(file, data, data_size);
@@ -271,11 +276,17 @@ static void board_init(ram_addr_t ram_size,
                 close(file);
                 
                 //And copy the data to the memory, if it is initialized
-                cpu_memory_rw_debug(cpu, address, (uint8_t *) data, data_size, TRUE);
+                printf("Configurable: copying 0x%lx byte of data from file %s to address 0x%lx\n", data_size, filename, address);
+//                ram_ptr = qemu_get_ram_ptr(memory_region_get_ram_addr(ram));
+//                memcpy(ram_ptr, data, data_size);
+//                qemu_put_ram_ptr(ram_ptr);
+                cpu_physical_memory_write_rom(address, (uint8_t *) data, data_size);
             }  
             
         }
     }
+    
+    //sysbus_create_simple("xilinx,uartlite", UARTLITE_BASEADDR, irq[3]);
     
     //Set PC to entry point
     g_assert(qdict_haskey(conf, "entry_address"));
@@ -287,148 +298,7 @@ static void board_init(ram_addr_t ram_size,
     ((CPUARMState *) cpu)->regs[15] = entry_address & (~1);
 #elif TARGET_I386
     ((CPUX86State *) cpu)->eip = entry_address;
-#endif
-        
-        
-/*    ARMCPU *cpu;
-    uint32_t entry = 0;
-
-    if (!args->cpu_model) {
-        args->cpu_model = "arm926";
-    }
-    cpu = cpu_arm_init(args->cpu_model);
-    if (!cpu) {
-        fprintf(stderr, "Unable to find CPU definition\n");
-        exit(1);
-    }
-    
-    //Get memory map from ELF file
-    {
-        Elf32_Ehdr ehdr;
-        Elf32_Phdr phdr;
-        Elf32_Shdr shdr;
-        MemoryRegion *sysmem = get_system_memory();
-        MemoryRegion *ram;
-        QObject * list_obj;
-        
-        int fd;
-        int i;
-        
-        fd = open(args->kernel_filename, O_RDONLY | O_BINARY);
-        if (fd < 0) {
-            fprintf(stderr, "Failed to open kernel file '%s'\n", args->kernel_filename);
-            exit(1);
-        }
-        
-        if (read(fd, &ehdr, sizeof(ehdr)) != sizeof(ehdr))
-        {
-            fprintf(stderr, "Failed to load ELF header from file '%s'\n", args->kernel_filename);
-            exit(1);
-        }
-        
-        entry = ehdr.e_entry;
-        
-        if (lseek(fd, ehdr.e_phoff, SEEK_SET) != ehdr.e_phoff)
-        {
-            fprintf(stderr, "Failed to seek to program headers\n");
-            exit(1);
-        }
-        
-        for(i = 0; i < ehdr.e_phnum; i++) 
-        {
-            if (read(fd, &phdr, sizeof(phdr)) != sizeof(phdr))
-            {
-                fprintf(stderr, "Failed to load program header %d at offset 0x%lx\n", i, ehdr.e_phoff + i * sizeof(phdr));
-                exit(1);
-            }
-            
-            if (phdr.p_type == PT_LOAD)
-            {
-                uint32_t addr = phdr.p_vaddr;
-                uint32_t size = phdr.p_memsz;
-                bool is_rom = !(phdr.p_flags & PF_W);
-                char label[50];
-                
-                snprintf(label, sizeof(label),  "phdr %d ram", i);
-//                printf("Adding memory region 0x%x - 0x%x%s    %s\n", addr, addr + size, (is_rom ? " (ROM)" : ""), label);
-                ram =  g_new(MemoryRegion, 1);
-                memory_region_init_ram(ram, label, size);
-                memory_region_add_subregion(sysmem, addr, ram);
-            }
-        } 
-        
-        if (lseek(fd, ehdr.e_shoff, SEEK_SET) != ehdr.e_shoff)
-        {
-            fprintf(stderr, "Failed to seek to section headers\n");
-            exit(1);
-        }
-        
-        for(i = 0; i < ehdr.e_shnum; i++) 
-        {
-            if (read(fd, &shdr, sizeof(shdr)) != sizeof(shdr))
-            {
-                fprintf(stderr, "Failed to load section header %d at offset 0x%lx\n", i, ehdr.e_shoff + i * sizeof(shdr));
-                exit(1);
-            }
-            
-            if (shdr.sh_type == SHT_NOBITS)
-            {
-                uint32_t addr = shdr.sh_addr;
-                uint32_t size = shdr.sh_size;
-                char label[50];
-                
-                snprintf(label, sizeof(label),  "shdr %d ram", i);
-//                printf("Adding memory region 0x%x - 0x%x    %s\n", addr, addr + size, label);
-                ram =  g_new(MemoryRegion, 1);
-                memory_region_init_ram(ram, label, size);
-                memory_region_add_subregion(sysmem, addr, ram);
-            }
-        } 
-        
-        list_obj = qobject_from_json(args->kernel_cmdline);
-        
-        if (list_obj && qobject_type(list_obj) == QTYPE_QLIST)
-        {
-            QListEntry * entry;
-            QList * list = qobject_to_qlist(list_obj);
-            int num_entry = 0;
-            QLIST_FOREACH_ENTRY(list, entry)
-            {
-                QObject * dict_obj = qlist_entry_obj(entry);
-                if (dict_obj && qobject_type(dict_obj) == QTYPE_QDICT)
-                {
-                    QDict * dict = qobject_to_qdict(dict_obj);
-                    uint32_t addr = qdict_get_int(dict, "addr");
-                    uint32_t size = qdict_get_int(dict, "size");
-                    char label[50];
-                
-                    snprintf(label, sizeof(label),  "user %d ram", num_entry++);
-//                    printf("Adding memory region 0x%x - 0x%x    %s\n", addr, addr + size, label);
-                    ram =  g_new(MemoryRegion, 1);
-                    memory_region_init_ram(ram, label, size);
-                    memory_region_add_subregion(sysmem, addr, ram);
-                }
-            }
-        }
-
-        //We definitely need the first 40 bytes of RAM for the interrupt table
-        ram =  g_new(MemoryRegion, 1);
-        memory_region_init_ram(ram,  "exception_handlers", 0x40);
-        memory_region_add_subregion(sysmem, 0x0, ram);
-    }
-    
-    
-
-    versatile_binfo.ram_size = 128 * 1024 * 1024;
-    versatile_binfo.kernel_filename = args->kernel_filename;
-    versatile_binfo.kernel_cmdline = args->kernel_cmdline;
-    versatile_binfo.initrd_filename = args->initrd_filename;
-//    versatile_binfo.board_id = 0x183; // Don't know what this does, but if I set it to 0 there is a segfault 
-//     arm_load_kernel(cpu, &versatile_binfo);
-//     
-// //    printf("Setting PC to entry address 0x%x\n", entry);
-//     cpu->env.regs[15] = entry;  
-    */  
+#endif 
 }
 
 static QEMUMachine configurable_machine = {
