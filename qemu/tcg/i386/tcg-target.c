@@ -979,7 +979,7 @@ static const void *qemu_st_helpers[4] = {
     helper_stl_mmu,
     helper_stq_mmu,
 };
-#else
+#else /* CONFIG_TCG_PASS_AREG0 */
 static void *qemu_ld_helpers[4] = {
     __ldb_mmu_symb,
     __ldw_mmu_symb,
@@ -993,8 +993,8 @@ static void *qemu_st_helpers[4] = {
     __stl_mmu_symb,
     __stq_mmu_symb,
 };
-#endif
-#else
+#endif /* CONFIG_TCG_PASS_AREG0 */
+#else /* CONFIG_S2E */
 #ifdef CONFIG_TCG_PASS_AREG0
 /* helper signature: helper_ld_mmu(CPUState *env, target_ulong addr,
    int mmu_idx) */
@@ -1013,7 +1013,7 @@ static const void *qemu_st_helpers[4] = {
     helper_stl_mmu,
     helper_stq_mmu,
 };
-#else
+#else /* CONFIG_TCG_PASS_AREG0 */
 /* legacy helper signature: __ld_mmu(target_ulong addr, int
    mmu_idx) */
 static void *qemu_ld_helpers[4] = {
@@ -1031,9 +1031,9 @@ static void *qemu_st_helpers[4] = {
     __stl_mmu,
     __stq_mmu,
 };
-#endif
+#endif /* CONFIG_TCG_PASS_AREG0 */
 
-#endif
+#endif /* CONFIG_S2E */
 
 /* Perform the TLB load and compare.
 
@@ -1114,7 +1114,7 @@ static inline void tcg_out_tlb_load(TCGContext *s, int addrlo_idx,
     tcg_out_modrm_offset(s, OPC_ADD_GvEv + P_REXW, r0, r1,
                          offsetof(CPUTLBEntry, addend) - which);
 }
-#endif
+#endif /* defined(CONFIG_SOFTMMU) */
 
 #if !defined(CONFIG_S2E)
 static void tcg_out_qemu_ld_direct(TCGContext *s, int datalo, int datahi,
