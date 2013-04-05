@@ -580,7 +580,7 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
     void *retaddr = NULL;
     target_ulong object_index, index;
     
-    printf("HELPER_PREFIX st+: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(val));
+    printf("HELPER_PREFIX st: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(val));
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(addr, ADDR_MAX);
     object_index = S2E_FORK_AND_CONCRETIZE(addr >> S2E_RAM_OBJECT_BITS,
