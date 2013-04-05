@@ -165,8 +165,8 @@ klee::ref<klee::Expr> RemoteMemory::slotMemoryAccess(S2EExecutionState *state,
     uint64_t width = value->getWidth() / 8;
 
     //FIXME: On a write request, the size is systematically one too big -> correcting this here
-    if (isWrite)
-        width = width / 2;
+//    if (isWrite)
+//        width = width / 2;
     
     if (!this->ranges.empty())
     {
