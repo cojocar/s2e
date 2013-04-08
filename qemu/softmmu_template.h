@@ -131,7 +131,7 @@ DATA_TYPE glue(glue(io_read, SUFFIX), MMUSUFFIX)(ENV_PARAM
                                               void *retaddr)
 {
     DATA_TYPE res;
-    
+
     printf("io_read: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(res));
     MemoryRegion *mr = iotlb_to_region(physaddr);
 
@@ -211,7 +211,7 @@ inline DATA_TYPE glue(glue(io_read_chk, SUFFIX), MMUSUFFIX)(ENV_PARAM target_phy
     MemoryRegion *mr = iotlb_to_region(physaddr);
 
     printf("io_read_chk: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(res));
-    
+
     target_ulong naddr = (physaddr & TARGET_PAGE_MASK)+addr;
     char label[64];
     int isSymb = 0;
@@ -291,7 +291,7 @@ glue(glue(glue(HELPER_PREFIX, ld), SUFFIX), MMUSUFFIX)(ENV_PARAM
     target_ulong tlb_addr;
     target_phys_addr_t addend, ioaddr;
     void *retaddr = NULL;
-    
+
     printf("HELPER_PREFIX, ld: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(res));
 
     /* test if there is match for unaligned or IO access */
@@ -376,7 +376,7 @@ glue(glue(slow_ld, SUFFIX), MMUSUFFIX)(ENV_PARAM
     target_ulong object_index, index, shift;
     target_phys_addr_t addend, ioaddr;
     target_ulong tlb_addr, addr1, addr2;
-    
+
     printf("HELPER_PREFIX, slow_ld: 0x%lx[%d]\n", (uint64_t) addr, DATA_SIZE);
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(addr, ADDR_MAX);
@@ -459,7 +459,7 @@ void glue(glue(io_write, SUFFIX), MMUSUFFIX)(ENV_PARAM
                                           void *retaddr)
 {
     MemoryRegion *mr = iotlb_to_region(physaddr);
-    
+
     printf("io_write: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(val));
 
     physaddr = (physaddr & TARGET_PAGE_MASK) + addr;
@@ -512,7 +512,7 @@ inline void glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_PARAM target_phys_ad
                                           void *retaddr)
 {
     printf("io_write_chk(2): 0x%lx[%ld]\n", (uint64_t) addr, sizeof(val));
-    
+
     target_phys_addr_t origaddr = physaddr;
     MemoryRegion *mr = iotlb_to_region(physaddr);
 
@@ -579,7 +579,7 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
     target_ulong tlb_addr;
     void *retaddr = NULL;
     target_ulong object_index, index;
-    
+
     printf("HELPER_PREFIX st: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(val));
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(addr, ADDR_MAX);
@@ -599,7 +599,7 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
             ioaddr = env->iotlb[mmu_idx][index];
             S2E_TRACE_MEMORY(addr, addr+ioaddr, val, 1, 1);
             glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, val, addr, retaddr);
-            
+
         } else if (unlikely(((addr & ~S2E_RAM_OBJECT_MASK) + DATA_SIZE - 1) >= S2E_RAM_OBJECT_SIZE)) {
 
         do_unaligned_access:
@@ -622,14 +622,13 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
             }
 #endif
             addend = env->tlb_table[mmu_idx][index].addend;
+            S2E_TRACE_MEMORY(addr, addr+addend, val, 1, 0);
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
             S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
             if(likely((e->addend & 1) && _s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE)))
                 glue(glue(st, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)), val);
             else
 #endif
-            
-            S2E_TRACE_MEMORY(addr, addr+addend, val, 1, 0);
             glue(glue(st, SUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend), val);
         }
     } else {
@@ -658,8 +657,8 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_PARAM
     target_ulong tlb_addr;
     target_ulong object_index, index;
     int i;
-    
-    printf("slow_st: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(val));
+
+    printf("HELPER_PREFIX slow_st: 0x%lx[%ld]\n", (uint64_t) addr, sizeof(val));
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(addr, ADDR_MAX);
     object_index = S2E_FORK_AND_CONCRETIZE(addr >> S2E_RAM_OBJECT_BITS,
@@ -673,7 +672,7 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_PARAM
             if ((addr & (DATA_SIZE - 1)) != 0)
                 goto do_unaligned_access;
             ioaddr = env->iotlb[mmu_idx][index];
-            
+
             S2E_TRACE_MEMORY(addr, addr+ioaddr, val, 1, 1);
             glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, val, addr, retaddr);
         } else if (((addr & ~S2E_RAM_OBJECT_MASK) + DATA_SIZE - 1) >= S2E_RAM_OBJECT_SIZE) {
@@ -697,13 +696,13 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_PARAM
             /* aligned/unaligned access in the same page */
             addend = env->tlb_table[mmu_idx][index].addend;
 
+            S2E_TRACE_MEMORY(addr, addr+addend, val, 1, 0);
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
             S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
             if((e->addend & 1) && _s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE))
                 glue(glue(st, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)), val);
             else
 #endif
-            S2E_TRACE_MEMORY(addr, addr+addend, val, 1, 0);
             glue(glue(st, SUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend), val);
         }
     } else {
