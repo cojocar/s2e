@@ -808,35 +808,6 @@ static int serial_isa_initfn(ISADevice *dev)
     return 0;
 }
 
-static int serial_sysbus_initfn(SysBusDevice *dev)
-{
-    static int index;
-    SysbusSerialState *sysbus = DO_UPCAST(SysbusSerialState, dev, dev);
-    SerialState *s = &sysbus->state;
-
-    if (sysbus->index == -1)
-        sysbus->index = index;
-    if (sysbus->index >= MAX_SERIAL_PORTS)
-        return -1;
-    if (sysbus->iobase == -1)
-        return -1;
-//        sysbus->iobase = isa_serial_io[sysbus->index];
-//    if (sysbus->isairq == -1)
-//        sysbus->isairq = isa_serial_irq[isa->index];
-    index++;
-
-    s->baudbase = 115200;
-    sysbus_init_irq(dev, &s->irq);
-//    isa_init_irq(dev, &s->irq, isa->isairq);
-    serial_init_core(s);
-//    qdev_set_legacy_instance_id(&dev->qdev, isa->iobase, 3);
-
-    memory_region_init_io(&s->io, &serial_io_ops, s, "serial", 8);
-    sysbus_init_mmio(dev, &s->io);
-//    isa_register_ioport(dev, &s->io, isa->iobase);
-    return 0;
-}
-
 static const VMStateDescription vmstate_isa_serial = {
     .name = "serial",
     .version_id = 3,
@@ -935,6 +906,39 @@ SerialState *serial_mm_init(MemoryRegion *address_space,
     return s;
 }
 
+
+static int serial_sysbus_initfn(SysBusDevice *dev)
+{
+    static int index;
+    SysbusSerialState *sysbus = DO_UPCAST(SysbusSerialState, dev, dev);
+    SerialState *s = &sysbus->state;
+
+    if (sysbus->index == -1)
+        sysbus->index = index;
+    if (sysbus->index >= MAX_SERIAL_PORTS)
+        return -1;
+//    if (sysbus->iobase == -1)
+//        return -1;
+//        sysbus->iobase = isa_serial_io[sysbus->index];
+//    if (sysbus->isairq == -1)
+//        sysbus->isairq = isa_serial_irq[isa->index];
+    index++;
+
+    s->baudbase = 115200;
+    s->chr = qemu_char_get_next_serial();
+    s->it_shift = 2;
+    
+    sysbus_init_irq(dev, &s->irq);
+//    isa_init_irq(dev, &s->irq, isa->isairq);
+    serial_init_core(s);
+//    qdev_set_legacy_instance_id(&dev->qdev, isa->iobase, 3);
+
+    memory_region_init_io(&s->io, &serial_mm_ops[0], s, "serial", 8 << s->it_shift);
+    sysbus_init_mmio(dev, &s->io);
+//    isa_register_ioport(dev, &s->io, isa->iobase);
+    return 0;
+}
+
 static Property serial_isa_properties[] = {
     DEFINE_PROP_UINT32("index", ISASerialState, index,   -1),
     DEFINE_PROP_HEX32("iobase", ISASerialState, iobase,  -1),
@@ -979,7 +983,7 @@ static TypeInfo serial_isa_info = {
 };
 
 static TypeInfo serial_sysbus_info = {
-    .name          = "isa-sysbus",
+    .name          = "sysbus-serial",
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(SysbusSerialState),
     .class_init    = serial_sysbus_class_initfn,
