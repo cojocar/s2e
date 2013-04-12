@@ -436,12 +436,11 @@ void S2EExecutor::handlerTraceMemoryAccess(Executor* executor,
         bool isIO    = cast<klee::ConstantExpr>(args[5])->getZExtValue();
 
         ref<Expr> value = klee::ExtractExpr::create(args[2], 0, width);
-        ref<Expr> unmodifiedValue = klee::ExtractExpr::create(args[2], 0, width);
         
-        s2eExecutor->m_s2e->getCorePlugin()->onDataMemoryAccess.emit(
+        ref<Expr> result = s2eExecutor->m_s2e->getCorePlugin()->onDataMemoryAccess.emit(
                 s2eState, args[0], args[1], value, isWrite, isIO);
         
-        if (value != unmodifiedValue)
+        if (value != result)
         {
             g_s2e->getWarningsStream() << "ERROR: The memory value has been changed by a onDataMemoryAccess handler, but writing back of this value is not yet implemented" << '\n';
         } 

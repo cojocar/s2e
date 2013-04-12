@@ -357,7 +357,6 @@ static void s2e_trace_memory_access_slow(
         if (exprResult.isNull())
         {
             //Do nothing. HAHA!
-            g_s2e->getDebugStream() << "s2e_trace_memory_access_slow: onDataMemoryAccess returned NULL" << '\n';
         }
         else if (isa<klee::ConstantExpr>(exprResult))
         {
@@ -375,7 +374,8 @@ static void s2e_trace_memory_access_slow(
         }
         else
         {
-            g_s2e->getWarningsStream() << "Error: onDataMemoryAccess returned symbolic value in s2e_trace_memory_access_slow - not implemented" << '\n';
+            g_s2e->getDebugStream() << "DEBUG: onDataMemoryAccess returned symbolic value in concrete mode, switching to symbolic mode ..." << '\n';
+            g_s2e_state->jumpToSymbolicCpp();
         }
             
         
