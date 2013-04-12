@@ -102,6 +102,10 @@ static int is_absolute_path(const char * filename)
     return filename[0] == '/';
 }
 
+static void dummy_interrupt(void * opaque, int irq, int level)
+{
+}
+
 static void board_init(ram_addr_t ram_size,
                      const char *boot_device,
                      const char *kernel_filename, const char *kernel_cmdline,
@@ -253,7 +257,6 @@ static void board_init(ram_addr_t ram_size,
                     strncpy(relative_filename, kernel_filename, dirname_len);
                     strcat(relative_filename, filename);
                     
-                    printf("Reading relative file: %s\n", relative_filename);
                     file = open(relative_filename, O_RDONLY | O_BINARY);
                     g_free(relative_filename);
                 }
@@ -276,13 +279,57 @@ static void board_init(ram_addr_t ram_size,
                 close(file);
                 
                 //And copy the data to the memory, if it is initialized
-                printf("Configurable: copying 0x%lx byte of data from file %s to address 0x%lx\n", data_size, filename, address);
+                printf("Configurable: Copying 0x%lx byte of data from file %s to address 0x%lx\n", data_size, filename, address);
 //                ram_ptr = qemu_get_ram_ptr(memory_region_get_ram_addr(ram));
 //                memcpy(ram_ptr, data, data_size);
 //                qemu_put_ram_ptr(ram_ptr);
                 cpu_physical_memory_write_rom(address, (uint8_t *) data, data_size);
             }  
             
+        }
+    }
+    
+    /*
+     * The devices stuff is just considered a hack, I want to replace everything here with a device tree parser as soon as I have the time ...
+     */
+     if (qdict_haskey(conf, "devices"))
+    {
+        QListEntry * entry;
+        QList * devices = qobject_to_qlist(qdict_get(conf, "devices"));
+        g_assert(devices);
+        
+        QLIST_FOREACH_ENTRY(devices, entry)
+        {
+            QDict * device;
+            
+            const char * qemu_name;
+            const char * bus;
+            uint64_t address;
+            qemu_irq* irq;
+            
+            g_assert(qobject_type(entry->value) == QTYPE_QDICT);
+            device = qobject_to_qdict(entry->value);
+            
+            g_assert(qdict_haskey(device, "address") && qobject_type(qdict_get(device, "address")) == QTYPE_QINT);
+            g_assert(qdict_haskey(device, "qemu_name") && qobject_type(qdict_get(device, "qemu_name")) == QTYPE_QSTRING);
+            g_assert(qdict_haskey(device, "bus") && qobject_type(qdict_get(device, "bus")) == QTYPE_QSTRING);
+            
+            bus = qdict_get_str(device, "bus");
+            qemu_name = qdict_get_str(device, "qemu_name");
+            address = qdict_get_int(device, "address");
+            
+            
+            
+            if (strcmp(bus, "sysbus") == 0)
+            {
+                //For now only dummy interrupts ...
+                irq = qemu_allocate_irqs(dummy_interrupt, NULL, 1);
+                sysbus_create_simple(qemu_name, address, *irq);
+            }
+            else
+            {
+                g_assert(0); //Right now only sysbus devices are supported ...
+            }
         }
     }
     
