@@ -45,6 +45,7 @@ extern "C" {
 }
 
 #include "RemoteMemory.h"
+#include "MemoryInterceptorMediator.h"
 #include <s2e/S2E.h>
 #include <s2e/S2EExecutionState.h>
 #include <s2e/ConfigFile.h>
@@ -60,7 +61,7 @@ extern "C" {
 namespace s2e {
 namespace plugins {
     
-S2E_DEFINE_PLUGIN(RemoteMemory, "Asks a remote program what the memory contents actually should be", "RemoteMemory", "Initializer");
+S2E_DEFINE_PLUGIN(RemoteMemory, "Asks a remote program what the memory contents actually should be", "RemoteMemory", "MemoryInterceptorMediator", "Initializer");
 
 void RemoteMemory::initialize()
 {
@@ -75,39 +76,44 @@ void RemoteMemory::initialize()
     m_remoteInterface = std::tr1::shared_ptr<RemoteMemoryInterface>(new RemoteMemoryInterface(s2e(), serverSocketAddress)); 
         
     //Connect memory access monitoring
-    s2e()->getCorePlugin()->onDataMemoryAccess.connect(
-          sigc::mem_fun(*this, &RemoteMemory::slotMemoryAccess));
+//    s2e()->getCorePlugin()->onDataMemoryAccess.connect(
+//          sigc::mem_fun(*this, &RemoteMemory::slotMemoryAccess));
           
-    s2e()->getCorePlugin()->onTranslateInstructionStart.connect(
-          sigc::mem_fun(*this, &RemoteMemory::slotTranslateInstructionStart));
+//     s2e()->getCorePlugin()->onTranslateInstructionStart.connect(
+//           sigc::mem_fun(*this, &RemoteMemory::slotTranslateInstructionStart));
     
     
-    std::vector<std::string> keys = cfg->getListKeys(getConfigKey() + ".ranges", &ok);
-    if (ok)
-    {
-        for (std::vector<std::string>::iterator itr = keys.begin();
-             itr != keys.end();
-             itr++)
-        {
-            if (!cfg->hasKey(getConfigKey() + ".ranges." + *itr + ".start_range") || 
-                !cfg->hasKey(getConfigKey() + ".ranges." + *itr + ".end_range"))
-            {
-                s2e()->getWarningsStream() << "[RemoteMemory] Invalid range configuration key: '" << *itr << "'. start or end subkey is missing." << '\n';
-            }
-            else
-            {
-                uint64_t start = cfg->getInt(getConfigKey() + ".ranges." + *itr + ".start_range");
-                uint64_t end = cfg->getInt(getConfigKey() + ".ranges." + *itr + ".end_range");
-                
-                s2e()->getMessagesStream() << "[RemoteMemory] Monitoring memory range " << hexval(start) << "-" << hexval(end) << '\n';
-                this->ranges.push_back(std::make_pair(start, end));
-            }
-        }
-    }
-    else
-    {
-        s2e()->getMessagesStream() << "[RemoteMemory] No memory ranges specified, forwarding requests for all memory" << '\n';
-    }
+//     std::vector<std::string> keys = cfg->getListKeys(getConfigKey() + ".ranges", &ok);
+//     if (ok)
+//     {
+//         for (std::vector<std::string>::iterator itr = keys.begin();
+//              itr != keys.end();
+//              itr++)
+//         {
+//             if (!cfg->hasKey(getConfigKey() + ".ranges." + *itr + ".start_range") || 
+//                 !cfg->hasKey(getConfigKey() + ".ranges." + *itr + ".end_range"))
+//             {
+//                 s2e()->getWarningsStream() << "[RemoteMemory] Invalid range configuration key: '" << *itr << "'. start or end subkey is missing." << '\n';
+//             }
+//             else
+//             {
+//                 uint64_t start = cfg->getInt(getConfigKey() + ".ranges." + *itr + ".start_range");
+//                 uint64_t end = cfg->getInt(getConfigKey() + ".ranges." + *itr + ".end_range");
+//                 
+//                 s2e()->getMessagesStream() << "[RemoteMemory] Monitoring memory range " << hexval(start) << "-" << hexval(end) << '\n';
+//                 this->ranges.push_back(std::make_pair(start, end));
+//             }
+//         }
+//     }
+//     else
+//     {
+//         s2e()->getMessagesStream() << "[RemoteMemory] No memory ranges specified, forwarding requests for all memory" << '\n';
+//     }
+    
+    MemoryInterceptorMediator * memoryInterceptorMediator = static_cast<MemoryInterceptorMediator *>(s2e()->getPlugin("MemoryInterceptorMediator"));
+    assert(memoryInterceptorMediator);
+    
+    memoryInterceptorMediator->addInterceptor(this);
       
     if (m_verbose)
         s2e()->getDebugStream() << "[RemoteMemory]: initialized" << '\n';
@@ -117,25 +123,24 @@ RemoteMemory::~RemoteMemory()
 {
 }
 
-void RemoteMemory::slotTranslateInstructionStart(ExecutionSignal* signal, 
-            S2EExecutionState* state,
-            TranslationBlock* tb,
-            uint64_t pc)
-{
-    signal->connect(sigc::mem_fun(*this, &RemoteMemory::slotExecuteInstructionStart));    
-}
+// void RemoteMemory::slotTranslateInstructionStart(ExecutionSignal* signal, 
+//             S2EExecutionState* state,
+//             TranslationBlock* tb,
+//             uint64_t pc)
+// {
+//     signal->connect(sigc::mem_fun(*this, &RemoteMemory::slotExecuteInstructionStart));    
+// }
 
-void RemoteMemory::slotExecuteInstructionStart(S2EExecutionState* state, uint64_t pc)
-{
-    //TODO: Check if IRQ has arrived, and inject it
-}
+// void RemoteMemory::slotExecuteInstructionStart(S2EExecutionState* state, uint64_t pc)
+// {
+//     //TODO: Check if IRQ has arrived, and inject it
+// }
 
 klee::ref<klee::Expr> RemoteMemory::slotMemoryAccess(S2EExecutionState *state,
         klee::ref<klee::Expr> virtaddr /* virtualAddress */,
         klee::ref<klee::Expr> hostaddr /* hostAddress */,
         klee::ref<klee::Expr> value /* value */,
-        bool isWrite,
-        bool isIO)
+        int access_type)
 {
     //Catch all the cases that we don't handle (symbolic values, IO addresses)
     if (!isa<klee::ConstantExpr>(virtaddr))
@@ -168,32 +173,34 @@ klee::ref<klee::Expr> RemoteMemory::slotMemoryAccess(S2EExecutionState *state,
 //    if (isWrite)
 //        width = width / 2;
     
-    if (!this->ranges.empty())
-    {
-        bool in_range = false;
-        
-        for(std::vector<std::pair<uint64_t, uint64_t> >::iterator itr = this->ranges.begin();
-            itr != this->ranges.end();
-            itr++)
-        {
-            if (addr >= itr->first && addr < itr->second)
-            {
-                in_range = true;
-                break;
-            }
-        }
-        
-        if (!in_range)
-            return value;
-    }
+//     if (!this->ranges.empty())
+//     {
+//         bool in_range = false;
+//         
+//         for(std::vector<std::pair<uint64_t, uint64_t> >::iterator itr = this->ranges.begin();
+//             itr != this->ranges.end();
+//             itr++)
+//         {
+//             if (addr >= itr->first && addr < itr->second)
+//             {
+//                 in_range = true;
+//                 break;
+//             }
+//         }
+//         
+//         if (!in_range)
+//             return value;
+//     }
     
-    if (isWrite)
+    if (access_type & ACCESS_TYPE_WRITE)
         accessType = EMemoryAccessType_Write;
-    else
+    else if (access_type & (ACCESS_TYPE_READ | ACCESS_TYPE_EXECUTE))
+    {
         if (addr == state->getPc())
             accessType = EMemoryAccessType_Execute;
         else 
             accessType = EMemoryAccessType_Read;
+    }
             
     uint64_t rValue = memoryAccessed(state, addr, width, cast<klee::ConstantExpr>(value)->getZExtValue(), accessType);    
     

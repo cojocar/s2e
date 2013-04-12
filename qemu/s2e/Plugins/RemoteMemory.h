@@ -39,7 +39,8 @@
 #include <s2e/Plugin.h>
 #include <s2e/Plugins/CorePlugin.h>
 #include <s2e/S2EExecutionState.h>
-#include <s2e/Plugins/MemoryMonitor.h>
+#include <s2e/Plugins/MemoryInterceptorMediator.h>
+
 
 extern "C" {
 #include <qemu-thread.h>
@@ -96,26 +97,27 @@ private:
  *  This is a plugin for aiding in debugging guest code.
  *  XXX: To be replaced by gdb.
  */
-class RemoteMemory : public Plugin
+class RemoteMemory : public MemoryInterceptor
 {
     S2E_PLUGIN
 public:
-    RemoteMemory(S2E* s2e): Plugin(s2e) {}
+    RemoteMemory(S2E* s2e): MemoryInterceptor(s2e) {}
     virtual ~RemoteMemory();
 
     void initialize();
+    
+private:
+    enum MemoryAccessType {EMemoryAccessType_None, EMemoryAccessType_Read, EMemoryAccessType_Write, EMemoryAccessType_Execute};
+    
     /**
      * Called whenever memory is accessed.
      * This function checks the arguments and then calls memoryAccessed() with parsed arguments.
      */
-    klee::ref<klee::Expr> slotMemoryAccess(S2EExecutionState *state,
+    virtual klee::ref<klee::Expr> slotMemoryAccess(S2EExecutionState *state,
         klee::ref<klee::Expr> virtaddr /* virtualAddress */,
         klee::ref<klee::Expr> hostaddr /* hostAddress */,
         klee::ref<klee::Expr> value /* value */,
-        bool isWrite,
-        bool isIO);
-private:
-    enum MemoryAccessType {EMemoryAccessType_None, EMemoryAccessType_Read, EMemoryAccessType_Write, EMemoryAccessType_Execute};
+        int access_type);
     
     /**
      * slotMemoryAccess forwards the call to this function after the arguments have been parsed and checked.

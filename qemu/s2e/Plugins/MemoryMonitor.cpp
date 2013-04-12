@@ -66,7 +66,9 @@ namespace s2e
       bool ok;
 
       m_verbose =
-          cfg->getBool(getConfigKey() + ".verbose", false, &ok) ? 1 : 0;
+          cfg->getBool(getConfigKey() + ".verbose", false, &ok);
+          
+      
 
       s2e()->getCorePlugin()->onDataMemoryAccess.connect(
           sigc::mem_fun(*this, &MemoryMonitor::slotMemoryAccess));
