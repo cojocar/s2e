@@ -73,7 +73,7 @@ void RemoteMemory::initialize()
       
     std::string serverSocketAddress = cfg->getString(getConfigKey() + ".listen", ":5555", &ok);
     
-    m_remoteInterface = std::tr1::shared_ptr<RemoteMemoryInterface>(new RemoteMemoryInterface(s2e(), serverSocketAddress)); 
+    m_remoteInterface = std::tr1::shared_ptr<RemoteMemoryInterface>(new RemoteMemoryInterface(s2e(), serverSocketAddress, m_verbose)); 
         
     //Connect memory access monitoring
 //    s2e()->getCorePlugin()->onDataMemoryAccess.connect(
@@ -206,8 +206,11 @@ klee::ref<klee::Expr> RemoteMemory::slotMemoryAccess(S2EExecutionState *state,
     
     if (rValue != cast<klee::ConstantExpr>(value)->getZExtValue())
     {
-        s2e()->getDebugStream() << "[RemoteMemory]: Returning different value " << hexval(rValue) << "[" << width 
-            << "] instead of " << hexval(cast<klee::ConstantExpr>(value)->getZExtValue()) << "[" << (value->getWidth() / 8) << "]" << '\n';
+            if (m_verbose)
+            {
+            s2e()->getDebugStream() << "[RemoteMemory]: Returning different value " << hexval(rValue) << "[" << width 
+                << "] instead of " << hexval(cast<klee::ConstantExpr>(value)->getZExtValue()) << "[" << (value->getWidth() / 8) << "]" << '\n';
+            }
         return klee::ConstantExpr::create(rValue, width * 8);
         
 //        s2e()->getWarningsStream() << "[RemoteMemory]: Unimplemented -> write back different value " << hexval(rValue) << " instead of " << hexval(cast<klee::ConstantExpr>(value)->getZExtValue()) << '\n';
@@ -280,11 +283,12 @@ static uint64_t hexBufToInt(std::string str)
     
     
 
-RemoteMemoryInterface::RemoteMemoryInterface(S2E* s2e, std::string remoteSockAddress) 
+RemoteMemoryInterface::RemoteMemoryInterface(S2E* s2e, std::string remoteSockAddress, bool verbose) 
     : m_s2e(s2e), 
       m_cancelThread(false), 
       m_socket(std::tr1::shared_ptr<QemuTcpSocket>(new QemuTcpSocket())),
-      m_state(NULL)
+      m_state(NULL),
+      m_verbose(verbose)
 {   
     qemu_mutex_init(&m_mutex);
     qemu_cond_init(&m_responseCond);
@@ -382,7 +386,8 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
      json::Object params;
      json::Object cpu_state;
      
-     m_s2e->getMessagesStream() << "[RemoteMemory] reading memory from address " << hexval(address) << "[" << size << "]" << '\n';
+     if (m_verbose)
+        m_s2e->getDebugStream() << "[RemoteMemory] reading memory from address " << hexval(address) << "[" << size << "]" << '\n';
      request.Insert(json::Object::Member("cmd", json::String("read")));
      
      //HACK: Instead of using the physical address switch here, this should be specified somehow ...
@@ -390,7 +395,8 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
      
      if (exprValue.isNull())
      {
-         m_s2e->getMessagesStream() << "[RemoteMemory] Failed to read old memory value at address " << hexval(address) << '\n';
+         if (m_verbose)
+            m_s2e->getDebugStream() << "[RemoteMemory] Failed to read old memory value at address " << hexval(address) << '\n';
      }
      else if (isa<klee::ConstantExpr>(exprValue))
      {
@@ -398,7 +404,7 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
      }
      else
      {
-         m_s2e->getMessagesStream() << "[RemoteMemory] Old value of memory at 0x" << hexval(address) << " is symbolic (currently not supported)" << '\n';
+         m_s2e->getWarningsStream() << "[RemoteMemory] Old value of memory at 0x" << hexval(address) << " is symbolic (currently not supported)" << '\n';
      }
          
      
@@ -423,7 +429,7 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
          }
          else
          {
-             m_s2e->getMessagesStream() << "[RemoteMemory] Register " << i << " is symbolic (currently not supported)" << '\n';
+             m_s2e->getWarningsStream() << "[RemoteMemory] Register " << i << " is symbolic (currently not supported)" << '\n';
          }
      }
      
@@ -470,7 +476,8 @@ void RemoteMemoryInterface::writeMemory(S2EExecutionState * state, uint32_t addr
      json::Object params;
      json::Object cpu_state;
      
-     m_s2e->getMessagesStream() << "[RemoteMemory] writing memory at address " << hexval(address) << "[" << size << "] = " << hexval(value) << '\n';
+     if (m_verbose)
+        m_s2e->getDebugStream() << "[RemoteMemory] writing memory at address " << hexval(address) << "[" << size << "] = " << hexval(value) << '\n';
      request.Insert(json::Object::Member("cmd", json::String("write")));
      
      params.Insert(json::Object::Member("value", json::String(intToHex(value))));

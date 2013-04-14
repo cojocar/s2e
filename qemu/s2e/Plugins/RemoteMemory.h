@@ -60,7 +60,7 @@ namespace plugins {
 class RemoteMemoryInterface
 {
 public:
-    RemoteMemoryInterface(S2E* s2e, std::string sockAddress);
+    RemoteMemoryInterface(S2E* s2e, std::string sockAddress, bool verbose = false);
     virtual ~RemoteMemoryInterface();
     void writeMemory(S2EExecutionState*, uint32_t address, int size, uint64_t value);
     uint64_t readMemory(S2EExecutionState*, uint32_t address, int size);
@@ -82,6 +82,7 @@ private:
     bool m_cancelThread;
     std::tr1::shared_ptr<s2e::QemuTcpSocket> m_socket;
     S2EExecutionState * m_state;
+    bool m_verbose;
 };
 
 // class QemuCharDevice
