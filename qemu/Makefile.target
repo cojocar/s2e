@@ -517,6 +517,7 @@ s2eobj-y += s2e/Plugins/MemInjector2.o
 s2eobj-y += s2e/Plugins/RemoteControl.o
 s2eobj-y += s2e/Plugins/RemoteMemory.o
 s2eobj-y += s2e/Plugins/MemoryInterceptorMediator.o
+s2eobj-y += s2e/Plugins/ArmFunctionMonitor.o
 
 #sqlite database is deprecated now
 #s2eobj-y += s2e/sqlite3.o

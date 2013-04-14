@@ -9985,6 +9985,7 @@ static inline void gen_intermediate_code_internal(CPUARMState *env,
     dc->enable_jmp_im = 1;
     dc->cpuState = env;
     tb->s2e_tb_type = TB_DEFAULT;
+    tb->instruction_set = env->thumb ? INSTRUCTION_SET_THUMB : INSTRUCTION_SET_ARM;
 
     s2e_on_translate_block_start(g_s2e, g_s2e_state, tb, pc_start);
     tmp64 = tcg_temp_new_i64();

@@ -198,7 +198,6 @@ klee::ref<klee::Expr> MemoryInterceptorMediator::slotMemoryAccess(S2EExecutionSt
          listener_itr != this->m_listeners.end();
          listener_itr++)
     {
-        s2e()->getDebugStream() << "[MemoryInterceptorMediator] Checking listener " << listener_itr->second << '\n';
         std::map< std::string, std::vector< MemoryInterceptorConfiguration > >::iterator conf_itr = this->m_configuration.find(listener_itr->second);
         
         if (conf_itr == this->m_configuration.end())
@@ -211,7 +210,6 @@ klee::ref<klee::Expr> MemoryInterceptorMediator::slotMemoryAccess(S2EExecutionSt
             ranges_itr != conf_itr->second.end();
             ranges_itr++)
         {
-            s2e()->getDebugStream() << "[MemoryInterceptorMediator] Checking memory range " << hexval(ranges_itr->start) << "-" << hexval(ranges_itr->end) << '\n';
             if ((ranges_itr->access_type & access_type) == access_type)
             {
                 if (is_concrete_address && ranges_itr->start <= address && address <= ranges_itr->end)
