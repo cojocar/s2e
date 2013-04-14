@@ -169,7 +169,7 @@ glue(glue(glue(CPU_PREFIX, ld), USUFFIX), MEMSUFFIX)(ENV_PARAM
     uintptr_t physaddr;
     int mmu_idx;
     
-//    printf("CPU_PREFIX, ld: 0x%lx[%ld]\n", (uint64_t) ptr, sizeof(res));
+//printf("CPU_PREFIX, ld: 0x%lx[%ld]\n", (uint64_t) ptr, sizeof(res));
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(ptr, ADDR_MAX);
     object_index = S2E_FORK_AND_CONCRETIZE(addr >> S2E_RAM_OBJECT_BITS,
@@ -213,7 +213,7 @@ glue(glue(glue(CPU_PREFIX, lds), SUFFIX), MEMSUFFIX)(ENV_PARAM
     uintptr_t physaddr;
     int mmu_idx;
     
-//    printf("CPU_PREFIX, lds: 0x%lx[%d]\n", (uint64_t) ptr, DATA_SIZE);
+//printf("CPU_PREFIX, lds: 0x%lx[%d]\n", (uint64_t) ptr, DATA_SIZE);
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(ptr, ADDR_MAX);
     object_index = S2E_FORK_AND_CONCRETIZE(addr >> S2E_RAM_OBJECT_BITS,
@@ -255,7 +255,7 @@ glue(glue(glue(CPU_PREFIX, st), SUFFIX), MEMSUFFIX)(ENV_PARAM target_ulong ptr,
     uintptr_t physaddr;
     int mmu_idx;
     
-//    printf("CPU_PREFIX, st: 0x%lx[%ld]\n", (uint64_t) ptr, sizeof(v));
+//printf("CPU_PREFIX, st: 0x%lx[%ld]\n", (uint64_t) ptr, sizeof(v));
 
     addr = S2E_FORK_AND_CONCRETIZE_ADDR(ptr, ADDR_MAX);
     object_index = S2E_FORK_AND_CONCRETIZE(addr >> S2E_RAM_OBJECT_BITS,
