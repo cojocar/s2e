@@ -114,7 +114,7 @@ static void dummy_interrupt(void * opaque, int irq, int level)
 /**
  * Synchronize registers initial state from JSON
  */
-static void machine_init_state(QDict * conf, CPUArchState * cpu, uint64_t * pc) {
+static void machine_init_state(QDict * conf, CPUArchState * cpu) {
 	g_assert(qdict_haskey(conf, "init_state"));
 
 	QListEntry * entry;
@@ -151,7 +151,10 @@ static void machine_init_state(QDict * conf, CPUArchState * cpu, uint64_t * pc) 
 					WR_cpu(cpu, regs[14], regvalue);
 				}
 				else if (strcmp(regname, "pc") == 0) {
-					*pc = regvalue;
+					((CPUARMState *) cpu)->regs[15] = regvalue;
+					// FIXME: something is wrong with offsets in assertion in
+					// s2e_write_register_concrete codepath
+					// WR_cpu(cpu, regs[15], regvalue);
 				}
 				else if (strcmp(regname, "cpsr") == 0) {
 					cpsr_write(cpu, regvalue, 0xFFFFFFFF);
@@ -214,7 +217,7 @@ static void board_init(ram_addr_t ram_size,
 {
     CPUArchState * cpu;
     QDict * conf = NULL;
-    uint64_t entry_address;
+    uint64_t entry_address=0;
 
     //Load configuration file
     if (kernel_filename)
@@ -436,25 +439,25 @@ static void board_init(ram_addr_t ram_size,
 
     //sysbus_create_simple("xilinx,uartlite", UARTLITE_BASEADDR, irq[3]);
 
-    //Set PC to entry point
-    g_assert(qdict_haskey(conf, "entry_address"));
-    g_assert(qobject_type(qdict_get(conf, "entry_address")) == QTYPE_QINT);
-    entry_address = qdict_get_int(conf, "entry_address");
-
-    // Optionally set the initial state
-    if (qdict_haskey(conf, "init_state")) {
-    	printf("Configurable: Setting initial state from JSON.\n");
-    	// This could override the entry_address
-    	machine_init_state(conf, cpu, &entry_address);
-    }
-
-    // Adjust the entry address
+    // TODO: merge entry_address with init_state.pc handling
+    // Set init state
+    g_assert((qdict_haskey(conf, "entry_address") || qdict_haskey(conf, "init_state")));
+    if (qdict_haskey(conf, "entry_address")) {
+    	g_assert(qobject_type(qdict_get(conf, "entry_address")) == QTYPE_QINT);
+    	entry_address = qdict_get_int(conf, "entry_address");
+        // Just set the entry address
 #ifdef TARGET_ARM
-    ((CPUARMState *) cpu)->thumb = (entry_address & 1) != 0 ? 1 : 0;
-    ((CPUARMState *) cpu)->regs[15] = entry_address & (~1);
+        ((CPUARMState *) cpu)->thumb = (entry_address & 1) != 0 ? 1 : 0;
+        ((CPUARMState *) cpu)->regs[15] = entry_address & (~1);
 #elif TARGET_I386
-    ((CPUX86State *) cpu)->eip = entry_address;
+        ((CPUX86State *) cpu)->eip = entry_address;
 #endif
+    } else if (qdict_haskey(conf, "init_state")) {
+    	// Optionally set the whole initial state
+    	printf("Configurable: Setting initial state from JSON.\n");
+    	machine_init_state(conf, cpu);
+    	entry_address = ((CPUARMState *) cpu)->regs[15] ;
+    }
 
     printf("Configurable: Ready to start at 0x%lx.\n", (unsigned long) entry_address);
 }
